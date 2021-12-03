@@ -10,11 +10,11 @@ type Zone struct {
 }
 
 type DnsZoneList struct {
-	TotalCount int `json:"totalCount"`
-	ZoneList   ZoneList `json:"zoneList"`
+	TotalCount int `json:"totalCount,omitempty"`
+	ZoneList   ZoneList `json:"zoneList,omitempty"`
 }
 
 type ZoneList []struct {
-	ZoneName 	   string    `json:"zoneName"`
-	ZoneID         string    `json:"zoneId"`
+	ZoneName 	   string    `json:"zoneName,omitempty"`
+	ZoneID         string    `json:"zoneId,omitempty"`
 }

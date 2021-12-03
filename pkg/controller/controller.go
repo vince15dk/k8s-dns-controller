@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/kanisterio/kanister/pkg/poll"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,9 +21,10 @@ import (
 )
 
 const (
-	secretName          = "dns-token"
-	annotationConfigKey = "nhn.cloud/dnsplus-config"
-	annotationHost      = "nhn.cloud/dnsplus-hosts"
+	secretName               = "dns-token"
+	annotationConfigKey      = "nhn.cloud/dnsplus-config"
+	annotationHost           = "nhn.cloud/dnsplus-hosts"
+	annotationLoadBalancerIp = "133.186.251.77"
 )
 
 type Controller struct {
@@ -113,8 +115,30 @@ func (c *Controller) processNextItem() bool {
 				Client:    c.client,
 				ListHosts: m,
 			}
+
 			d.CreateDnsPlusZone(ns)
-			log.Println("Creating DnsPlusZone")
+
+			// query dns plus to make sure ingress ip is provided
+			lb, err := c.waitForIngressLB(ns, name)
+			if err != nil {
+				log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
+			}
+			ListRecords := make(map[int]string)
+			for i, rH := range ingress.Spec.Rules {
+				for _, h := range aH {
+					if strings.Contains(rH.Host, h) {
+						ListRecords[i] = fmt.Sprintf("%s.", rH.Host)
+					}
+				}
+			}
+			r := api.RecordSetHandler{
+				Client:      c.client,
+				ListRecords: ListRecords,
+			}
+
+			zoneList := d.ListDnsPlusZone(ns)
+
+			r.CreateRecordSet(ns, lb, zoneList)
 		}
 
 	case "delete":
@@ -142,6 +166,28 @@ func (c *Controller) processNextItem() bool {
 	}
 
 	return true
+}
+
+func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	lb := ""
+	err := poll.Wait(ctx, func(ctx context.Context) (bool, error) {
+		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			log.Printf("err %s\n", err.Error())
+		}
+		for _, v := range ingress.Status.LoadBalancer.Ingress {
+			if v.IP != "" {
+				lb = v.IP
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+
+	return lb, err
+
 }
 
 func checkIngressLister(c *Controller, namespace, name string) bool {

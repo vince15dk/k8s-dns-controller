@@ -47,7 +47,7 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string) {
 	}
 }
 
-func (d *DnsHandler) DeleteDnsPlusZone(namespace string, dnsList map[int]string) {
+func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList map[string]string) {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(d.Client, namespace)
 	if err != nil {
@@ -58,8 +58,8 @@ func (d *DnsHandler) DeleteDnsPlusZone(namespace string, dnsList map[int]string)
 	h := generateHeader(&http.Header{})
 
 	// Create DnsPlus
-	for _, dns := range dnsList{
-		url := fmt.Sprintf("%s/%s/%s=%s", baseUrl, s.AppKey, "zones/async?zoneIdList", dns)
+	for _, zoneId := range zoneList{
+		url := fmt.Sprintf("%s/%s/%s=%s", baseUrl, s.AppKey, "zones/async?zoneIdList", zoneId)
 
 		_, err := DeleteHandleFunc(url, h)
 		if err != nil {
@@ -69,7 +69,7 @@ func (d *DnsHandler) DeleteDnsPlusZone(namespace string, dnsList map[int]string)
 	}
 }
 
-func (d *DnsHandler) ListDnsPlusZone(namespace string) map[int]string {
+func (d *DnsHandler) ListDnsPlusZone(namespace string) map[string]string {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(d.Client, namespace)
 	if err != nil {
@@ -97,9 +97,9 @@ func (d *DnsHandler) ListDnsPlusZone(namespace string) map[int]string {
 		ZoneList:   scheme.ZoneList{},
 	}
 	err = json.Unmarshal(bytes, dnsList)
-	m := make(map[int]string)
-	for i, dns := range dnsList.ZoneList {
-		m[i] = dns.ZoneID
+	m := make(map[string]string)
+	for _, dns := range dnsList.ZoneList {
+		m[dns.ZoneName] = dns.ZoneID
 	}
 	return m
 }
