@@ -31,7 +31,7 @@ func main(){
 	}
 
 	// period of re-sync by calling UpdateFunc of the event handler
-	informer := informers.NewSharedInformerFactory(clientSet, 30*time.Second)
+	informer := informers.NewSharedInformerFactory(clientSet, 5*time.Minute)
 
 	ch := make(chan struct{})
 	c := controller.NewController(clientSet, informer.Extensions().V1beta1().Ingresses())
