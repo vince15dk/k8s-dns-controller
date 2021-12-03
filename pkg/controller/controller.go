@@ -1,26 +1,32 @@
 package controller
 
 import (
-
+	"context"
+	"fmt"
+	ingressv1 "k8s.io/api/extensions/v1beta1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	netowrkingInformers "k8s.io/client-go/informers/networking/v1"
+	netowrkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
-	networkingLister "k8s.io/client-go/listers/networking/v1"
+	networkingLister "k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"log"
+	"strconv"
 	"time"
 )
 
-var (
+const (
 	secretName = "dns-token"
+	annotationKey = "nhn.cloud/dnsplus-config"
 )
 
 type Controller struct {
 	client        kubernetes.Interface
 	clusterSynced cache.InformerSynced
 	lister        networkingLister.IngressLister
-	wq     workqueue.RateLimitingInterface
+	wq            workqueue.RateLimitingInterface
 	state         string
 }
 
@@ -29,7 +35,7 @@ func NewController(client kubernetes.Interface, informer netowrkingInformers.Ing
 		client:        client,
 		clusterSynced: informer.Informer().HasSynced,
 		lister:        informer.Lister(),
-		wq:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "ingress"),
+		wq:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "ingress"),
 	}
 
 	informer.Informer().AddEventHandler(
@@ -76,24 +82,42 @@ func (c *Controller) processNextItem() bool {
 		log.Printf("error %s, Getting the namespace from lister", err.Error())
 		return false
 	}
-	log.Println("creating ingress")
-	log.Println(ns, name)
-	switch c.state{
-	case "create":
-		ingress, err := c.lister.Ingresses(ns).Get(name)
-		if err != nil{
-			log.Printf("error %s, Getting the instance resource from lister", err.Error())
+
+	// check if the object has been deleted from k8s cluster
+	ctx := context.Background()
+	ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		if item.(*ingressv1.Ingress).Annotations[annotationKey] == "true"{
+			c.state = "delete"
 		}
-		log.Println("inside create state")
-		log.Println(ingress)
+	}
+
+	switch c.state {
+	case "create":
+		fmt.Println(ingress.ObjectMeta.Annotations[annotationKey])
 
 	case "delete":
+		fmt.Println("inside delete")
 
 	case "update":
-
+		fmt.Println(ingress.ObjectMeta.Annotations[annotationKey])
 	}
 
 	return true
+}
+
+func checkIngressLister(c *Controller, namespace, name string) bool {
+	ingress, err := c.lister.Ingresses(namespace).Get(name)
+	if err != nil{
+		log.Printf("error %s, Getting the ingress from lister", err.Error())
+		return false
+	}
+	t := ingress.ObjectMeta.Annotations[annotationKey]
+	b, err := strconv.ParseBool(t)
+	if err != nil{
+		log.Printf("error %s, Failed to parse string to bool")
+	}
+	return b
 }
 
 func (c *Controller) handleIngressAdd(obj interface{}) {
@@ -104,12 +128,11 @@ func (c *Controller) handleIngressAdd(obj interface{}) {
 
 func (c *Controller) handleIngressDelete(obj interface{}) {
 	log.Println("Deleting ingress handler is called")
-	c.state = "delete"
 	c.wq.Add(obj)
 }
 
 func (c *Controller) handleIngressUpdate(old interface{}, obj interface{}) {
-	log.Println("Updating ingresshandler is called")
+	log.Println("Updating ingress handler is called")
 	c.state = "update"
 	c.wq.Add(obj)
 }

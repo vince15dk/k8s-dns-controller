@@ -6,9 +6,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 	"log"
 	"path/filepath"
-	"k8s.io/client-go/util/homedir"
 	"time"
 )
 
@@ -34,7 +34,7 @@ func main(){
 	informer := informers.NewSharedInformerFactory(clientSet, 30*time.Second)
 
 	ch := make(chan struct{})
-	c := controller.NewController(clientSet, informer.Networking().V1().Ingresses())
+	c := controller.NewController(clientSet, informer.Extensions().V1beta1().Ingresses())
 
 	// start initializes all requested informers
 	informer.Start(ch)
