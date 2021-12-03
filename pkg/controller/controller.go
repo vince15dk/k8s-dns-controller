@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,12 +15,14 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
-	secretName = "dns-token"
-	annotationKey = "nhn.cloud/dnsplus-config"
+	secretName          = "dns-token"
+	annotationConfigKey = "nhn.cloud/dnsplus-config"
+	annotationHost      = "nhn.cloud/dnsplus-hosts"
 )
 
 type Controller struct {
@@ -87,20 +90,37 @@ func (c *Controller) processNextItem() bool {
 	ctx := context.Background()
 	ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		if item.(*ingressv1.Ingress).Annotations[annotationKey] == "true"{
+		if item.(*ingressv1.Ingress).Annotations[annotationConfigKey] == "true" {
 			c.state = "delete"
 		}
 	}
 
 	switch c.state {
 	case "create":
-		fmt.Println(ingress.ObjectMeta.Annotations[annotationKey])
+		b, _ := strconv.ParseBool(ingress.ObjectMeta.Annotations[annotationConfigKey])
+		if b {
+			aH := strings.Split(ingress.ObjectMeta.Annotations[annotationHost], ",")
+			m := make(map[int]string)
+			for i, rH := range ingress.Spec.Rules {
+				for _, h := range aH {
+					if rH.Host == h {
+						m[i] = fmt.Sprintf("%s.", rH.Host)
+					}
+				}
+			}
+			d := api.DnsHandler{
+				Client:    c.client,
+				ListHosts: m,
+			}
+			d.CreateDnsPlusZone(ns)
+			log.Println("Creating DnsPlusZone")
+		}
 
 	case "delete":
 		fmt.Println("inside delete")
 
 	case "update":
-		fmt.Println(ingress.ObjectMeta.Annotations[annotationKey])
+		fmt.Println(ingress.ObjectMeta.Annotations[annotationConfigKey])
 	}
 
 	return true
@@ -108,13 +128,13 @@ func (c *Controller) processNextItem() bool {
 
 func checkIngressLister(c *Controller, namespace, name string) bool {
 	ingress, err := c.lister.Ingresses(namespace).Get(name)
-	if err != nil{
+	if err != nil {
 		log.Printf("error %s, Getting the ingress from lister", err.Error())
 		return false
 	}
-	t := ingress.ObjectMeta.Annotations[annotationKey]
+	t := ingress.ObjectMeta.Annotations[annotationConfigKey]
 	b, err := strconv.ParseBool(t)
-	if err != nil{
+	if err != nil {
 		log.Printf("error %s, Failed to parse string to bool")
 	}
 	return b

@@ -7,7 +7,7 @@ execDir=~/go/src/k8s.io/code-generator
 ## generate manifests again after adding subresource `// +kubebuilder:subresource:status` to the resource
 controller-gen paths=github.com/vince15dk/k8s-operator-dnsplus/pkg/apis/nhncloud.com/v1alpha1 crd:trivialVersions=true crd:crdVersions=v1 output:crd:artifacts:config=manifests
 
-kl create secret generic nhn-token --from-literal=tenantId=12b2e9b9caac4247887fe8501492d6c0 --from-literal=userName=sukjoo.kim@nhn.com --from-literal=password='nhn!@%$0'
+kl create secret generic dnsplus-secret --from-literal=appKey=KaRep2t4HVPw31TF --from-literal=userName=sukjoo.kim@nhn.com
 
 # create dns zones
 curl -X POST 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/zahH4VxBweLj4Jc8/zones' -H 'Content-Type: application/json' --data @data.json
