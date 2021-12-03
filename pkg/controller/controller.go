@@ -59,6 +59,7 @@ func (c *Controller) Run(ch chan struct{}) error {
 	go wait.Until(c.worker, time.Second, ch)
 
 	<-ch
+
 	return nil
 }
 
@@ -117,10 +118,27 @@ func (c *Controller) processNextItem() bool {
 		}
 
 	case "delete":
-		fmt.Println("inside delete")
+		b, _ := strconv.ParseBool(item.(*ingressv1.Ingress).Annotations[annotationConfigKey])
+		if b {
+			aH := strings.Split(item.(*ingressv1.Ingress).Annotations[annotationHost], ",")
+			m := make(map[int]string)
+			for i, rH := range ingress.Spec.Rules {
+				for _, h := range aH {
+					if rH.Host == h {
+						m[i] = fmt.Sprintf("%s.", rH.Host)
+					}
+				}
+			}
+			d := api.DnsHandler{
+				Client:    c.client,
+				ListHosts: m,
+			}
+			dnsList := d.ListDnsPlusZone(ns)
+			d.DeleteDnsPlusZone(ns, dnsList)
+			log.Println("Deleting DnsPlusZone")
+		}
 
 	case "update":
-		fmt.Println(ingress.ObjectMeta.Annotations[annotationConfigKey])
 	}
 
 	return true

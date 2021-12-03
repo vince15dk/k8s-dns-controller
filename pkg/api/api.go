@@ -33,10 +33,30 @@ func generateSecret(client kubernetes.Interface, namespace string) (*scheme.Secr
 
 func PostHandlerFunc(url string, body interface{}, header *http.Header) (*http.Response, error) {
 	jsonBytes, err := json.Marshal(body)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(jsonBytes))
+	request.Header = *header
+	client := http.Client{}
+	return client.Do(request)
+}
+
+func ListHandlerFunc(url string, header *http.Header) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header = *header
+	client := http.Client{}
+	return client.Do(request)
+}
+
+func DeleteHandleFunc(url string, header *http.Header) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, err
+	}
 	request.Header = *header
 	client := http.Client{}
 	return client.Do(request)

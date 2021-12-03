@@ -9,11 +9,14 @@ controller-gen paths=github.com/vince15dk/k8s-operator-dnsplus/pkg/apis/nhncloud
 
 kl create secret generic dnsplus-secret --from-literal=appKey=KaRep2t4HVPw31TF --from-literal=userName=sukjoo.kim@nhn.com
 
+# list dns zones
+curl -X GET 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/KaRep2t4HVPw31TF/zones'
+
 # create dns zones
-curl -X POST 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/zahH4VxBweLj4Jc8/zones' -H 'Content-Type: application/json' --data @data.json
+curl -X POST 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/KaRep2t4HVPw31TF/zones' -H 'Content-Type: application/json' --data @data.json
 
 # delete dns zones
-curl -X DELETE 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/zahH4VxBweLj4Jc8/zones/async?zoneIdList=496fe8fb-4044-4641-b312-241de04fd108' -H 'Content-Type: application/json'
+curl -X DELETE 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/KaRep2t4HVPw31TF/zones/async?zoneIdList=496fe8fb-4044-4641-b312-241de04fd108' -H 'Content-Type: application/json'
 
 # add record set
 curl -X POST 'https://api-dnsplus.cloud.toast.com/dnsplus/v1.0/appkeys/zahH4VxBweLj4Jc8/zones/496fe8fb-4044-4641-b312-241de04fd108/recordsets' -H 'Content-Type: application/json' --data @record.json
