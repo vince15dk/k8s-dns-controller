@@ -144,6 +144,7 @@ func (c *Controller) processNextItem() bool {
 						}
 					}
 				}
+
 				d := api.DnsHandler{
 					Client:    c.client,
 					ListHosts: m,
@@ -153,11 +154,17 @@ func (c *Controller) processNextItem() bool {
 				d.CreateDnsPlusZone(ns, zoneList)
 
 				// query dns plus to make sure ingress ip is provided
-				lb, err := c.waitForIngressLB(ns, name)
+				ch := make(chan string)
+
+				lb, err := c.waitForIngressLB(ns, name, ch)
+
+
 				if err != nil {
 					log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
 					return false
 				}
+
+
 				ListRecords := make(map[int]string)
 				for i, rH := range ingress.Spec.Rules {
 					for _, h := range aH {
@@ -209,7 +216,7 @@ func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
 	err := poll.Wait(ctx, func(ctx context.Context) (bool, error) {
 		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			log.Printf("err err err %s\n", err.Error())
+			log.Printf("err %s\n", err.Error())
 			return true, nil
 		}
 		for _, v := range ingress.Status.LoadBalancer.Ingress {
@@ -240,13 +247,14 @@ func checkIngressLister(c *Controller, namespace, name string) bool {
 func (c *Controller) handleIngressAdd(obj interface{}) {
 	log.Println("Adding ingress handler is called")
 	c.state = "create"
-	c.wq.Add(obj)
+	//c.wq.Add(obj)
+	c.wq.AddAfter(obj, time.Second * 2)
 }
 
 func (c *Controller) handleIngressDelete(obj interface{}) {
 	log.Println("Deleting ingress handler is called")
 	c.state = "delete"
-	c.wq.Add(obj)
+	c.wq.AddAfter(obj, time.Second * 2)
 }
 
 func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {

@@ -29,7 +29,6 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]str
 	}
 	// generate header for POST
 	h := generateHeader(&http.Header{})
-
 	// Create DnsPlus
 	url := fmt.Sprintf("%s/%s/%s", baseUrl, s.AppKey, "zones")
 	listHosts := make([]string, 0)
