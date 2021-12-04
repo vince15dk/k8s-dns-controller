@@ -108,7 +108,6 @@ func (c *Controller) processNextItem() bool {
 		//fmt.Println(result1)
 		//fmt.Println(result2)
 
-
 	}
 
 	if c.state != "update" { // test
@@ -154,32 +153,7 @@ func (c *Controller) processNextItem() bool {
 				d.CreateDnsPlusZone(ns, zoneList)
 
 				// query dns plus to make sure ingress ip is provided
-				ch := make(chan string)
-
-				lb, err := c.waitForIngressLB(ns, name, ch)
-
-
-				if err != nil {
-					log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
-					return false
-				}
-
-
-				ListRecords := make(map[int]string)
-				for i, rH := range ingress.Spec.Rules {
-					for _, h := range aH {
-						if strings.Contains(rH.Host, h) {
-							ListRecords[i] = fmt.Sprintf("%s.", rH.Host)
-						}
-					}
-				}
-				r := api.RecordSetHandler{
-					Client:      c.client,
-					ListRecords: ListRecords,
-				}
-
-				zoneList = d.ListDnsPlusZone(ns)
-				r.CreateRecordSet(ns, lb, zoneList)
+				go c.AddRecord(ns, name, ingress, aH, d)
 			}
 
 		case "delete":
@@ -209,7 +183,56 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
+func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH []string, d api.DnsHandler) {
+	lb, err := c.waitForIngressLB(ns, name)
+	if err != nil {
+		log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
+		//return false
+	}
+	ListRecords := make(map[int]string)
+	for i, rH := range ingress.Spec.Rules {
+		for _, h := range aH {
+			if strings.Contains(rH.Host, h) {
+				ListRecords[i] = fmt.Sprintf("%s.", rH.Host)
+			}
+		}
+	}
+	r := api.RecordSetHandler{
+		Client:      c.client,
+		ListRecords: ListRecords,
+	}
+
+	zoneList := d.ListDnsPlusZone(ns)
+	r.CreateRecordSet(ns, lb, zoneList)
+}
+
 func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
+	fmt.Println("waitfor ingress sleep here")
+	lb := ""
+	count := 0
+	for {
+		fmt.Printf("try %d\n", count)
+		time.Sleep(time.Second * 5)
+		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			log.Printf("err %s\n", err.Error())
+			break
+		}
+		for _, v := range ingress.Status.LoadBalancer.Ingress {
+			if v.IP != "" {
+				lb = v.IP
+				return lb, nil
+			}
+		}
+		if count == 36 {
+			break
+		}
+		count++
+	}
+	return "", errors.New("unable to fetch ingress lb ip")
+}
+
+func (c *Controller) waitForIngressLBPoll(namespace, name string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	lb := ""
@@ -248,13 +271,13 @@ func (c *Controller) handleIngressAdd(obj interface{}) {
 	log.Println("Adding ingress handler is called")
 	c.state = "create"
 	//c.wq.Add(obj)
-	c.wq.AddAfter(obj, time.Second * 2)
+	c.wq.AddAfter(obj, time.Second*2)
 }
 
 func (c *Controller) handleIngressDelete(obj interface{}) {
 	log.Println("Deleting ingress handler is called")
 	c.state = "delete"
-	c.wq.AddAfter(obj, time.Second * 2)
+	c.wq.AddAfter(obj, time.Second*2)
 }
 
 func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {
@@ -264,6 +287,5 @@ func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {
 		old,
 		new,
 	}
-	c.wq.Add(s)
+	c.wq.AddAfter(s, time.Second*2)
 }
-
