@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"log"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -19,7 +20,7 @@ type DnsHandler struct {
 	ListHosts map[int]string
 }
 
-func (d *DnsHandler) CreateDnsPlusZone(namespace string) {
+func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]string) {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(d.Client, namespace)
 	if err != nil {
@@ -31,8 +32,18 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string) {
 
 	// Create DnsPlus
 	url := fmt.Sprintf("%s/%s/%s", baseUrl, s.AppKey, "zones")
+	listHosts := make([]string, 0)
+	lo: for _, record := range d.ListHosts {
+		for zoneName, _ := range zoneList {
+			if strings.Contains(record, zoneName) {
+				continue lo
+			}
+		}
+		listHosts = append(listHosts, record)
+	}
+	fmt.Println(listHosts)
 
-	for _, host := range d.ListHosts {
+	for _, host := range listHosts {
 		zone := scheme.DnsZone{
 			Zone: scheme.Zone{
 				ZoneName:    host,
@@ -60,7 +71,6 @@ func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList map[string]str
 	// Create DnsPlus
 	for _, zoneId := range zoneList{
 		url := fmt.Sprintf("%s/%s/%s=%s", baseUrl, s.AppKey, "zones/async?zoneIdList", zoneId)
-
 		_, err := DeleteHandleFunc(url, h)
 		if err != nil {
 			log.Printf("error %s\n", err.Error())

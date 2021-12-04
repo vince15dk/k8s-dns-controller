@@ -13,7 +13,6 @@ import (
 	netowrkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
 	networkingLister "k8s.io/client-go/listers/extensions/v1beta1"
-	set "github.com/deckarep/golang-set"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"log"
@@ -78,7 +77,6 @@ func (c *Controller) processNextItem() bool {
 	if shutDown {
 		return false
 	}
-
 	defer c.wq.Forget(item)
 
 	if c.state == "update" {
@@ -99,22 +97,21 @@ func (c *Controller) processNextItem() bool {
 			newObj = append(newObj, r.Host)
 		}
 
-		fmt.Println(oldObj)
-		fmt.Println(newObj)
-		fmt.Println("using golang-set library")
-		oldSet := set.NewSetFromSlice(oldObj)
-		newSet := set.NewSetFromSlice(newObj)
-		result1 := oldSet.Difference(newSet) // show deleted one
-		result2 := newSet.Difference(oldSet) // show added one
-
-		fmt.Println(result1)
-		fmt.Println(result2)
+		//fmt.Println(oldObj)
+		//fmt.Println(newObj)
+		//fmt.Println("using golang-set library")
+		//oldSet := set.NewSetFromSlice(oldObj)
+		//newSet := set.NewSetFromSlice(newObj)
+		//result1 := oldSet.Difference(newSet) // show deleted one
+		//result2 := newSet.Difference(oldSet) // show added one
+		//
+		//fmt.Println(result1)
+		//fmt.Println(result2)
 
 
 	}
 
 	if c.state != "update" { // test
-
 		key, err := cache.MetaNamespaceKeyFunc(item)
 		if err != nil {
 			log.Printf("error %s called Namespace key func on cache for item", err.Error())
@@ -125,7 +122,6 @@ func (c *Controller) processNextItem() bool {
 			log.Printf("error %s, Getting the namespace from lister", err.Error())
 			return false
 		}
-
 		// check if the object has been deleted from k8s cluster
 		ctx := context.Background()
 		ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
@@ -152,13 +148,15 @@ func (c *Controller) processNextItem() bool {
 					Client:    c.client,
 					ListHosts: m,
 				}
+				zoneList := d.ListDnsPlusZone(ns)
 
-				d.CreateDnsPlusZone(ns)
+				d.CreateDnsPlusZone(ns, zoneList)
 
 				// query dns plus to make sure ingress ip is provided
 				lb, err := c.waitForIngressLB(ns, name)
 				if err != nil {
 					log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
+					return false
 				}
 				ListRecords := make(map[int]string)
 				for i, rH := range ingress.Spec.Rules {
@@ -173,7 +171,7 @@ func (c *Controller) processNextItem() bool {
 					ListRecords: ListRecords,
 				}
 
-				zoneList := d.ListDnsPlusZone(ns)
+				zoneList = d.ListDnsPlusZone(ns)
 				r.CreateRecordSet(ns, lb, zoneList)
 			}
 
@@ -201,7 +199,6 @@ func (c *Controller) processNextItem() bool {
 			fmt.Println("update called!")
 		}
 	} //end
-
 	return true
 }
 
@@ -212,7 +209,8 @@ func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
 	err := poll.Wait(ctx, func(ctx context.Context) (bool, error) {
 		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			log.Printf("err %s\n", err.Error())
+			log.Printf("err err err %s\n", err.Error())
+			return true, nil
 		}
 		for _, v := range ingress.Status.LoadBalancer.Ingress {
 			if v.IP != "" {
@@ -260,3 +258,4 @@ func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {
 	}
 	c.wq.Add(s)
 }
+
