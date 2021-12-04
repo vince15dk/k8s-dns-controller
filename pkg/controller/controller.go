@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	set "github.com/deckarep/golang-set"
 	"github.com/kanisterio/kanister/pkg/poll"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
@@ -97,20 +98,18 @@ func (c *Controller) processNextItem() bool {
 			newObj = append(newObj, r.Host)
 		}
 
-		//fmt.Println(oldObj)
-		//fmt.Println(newObj)
-		//fmt.Println("using golang-set library")
-		//oldSet := set.NewSetFromSlice(oldObj)
-		//newSet := set.NewSetFromSlice(newObj)
-		//result1 := oldSet.Difference(newSet) // show deleted one
-		//result2 := newSet.Difference(oldSet) // show added one
-		//
-		//fmt.Println(result1)
-		//fmt.Println(result2)
+		fmt.Println(oldObj)
+		fmt.Println(newObj)
+		fmt.Println("using golang-set library")
+		oldSet := set.NewSetFromSlice(oldObj)
+		newSet := set.NewSetFromSlice(newObj)
+		result1 := oldSet.Difference(newSet) // show deleted one
+		result2 := newSet.Difference(oldSet) // show added one
 
-	}
+		fmt.Println(result1.ToSlice())
+		fmt.Println(result2.ToSlice())
 
-	if c.state != "update" { // test
+	} else { // test
 		key, err := cache.MetaNamespaceKeyFunc(item)
 		if err != nil {
 			log.Printf("error %s called Namespace key func on cache for item", err.Error())
