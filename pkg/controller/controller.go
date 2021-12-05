@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	set "github.com/deckarep/golang-set"
 	"github.com/kanisterio/kanister/pkg/poll"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
@@ -97,17 +96,17 @@ func (c *Controller) processNextItem() bool {
 		for _, r := range updateItem[1].(*ingressv1.Ingress).Spec.Rules {
 			newObj = append(newObj, r.Host)
 		}
-
-		fmt.Println(oldObj)
-		fmt.Println(newObj)
-		fmt.Println("using golang-set library")
-		oldSet := set.NewSetFromSlice(oldObj)
-		newSet := set.NewSetFromSlice(newObj)
-		result1 := oldSet.Difference(newSet) // show deleted one
-		result2 := newSet.Difference(oldSet) // show added one
-
-		fmt.Println(result1.ToSlice())
-		fmt.Println(result2.ToSlice())
+		//
+		//fmt.Println(oldObj)
+		//fmt.Println(newObj)
+		//fmt.Println("using golang-set library")
+		//oldSet := set.NewSetFromSlice(oldObj)
+		//newSet := set.NewSetFromSlice(newObj)
+		//result1 := oldSet.Difference(newSet) // show deleted one
+		//result2 := newSet.Difference(oldSet) // show added one
+		//
+		//fmt.Println(result1.ToSlice())
+		//fmt.Println(result2.ToSlice())
 
 	} else { // test
 		key, err := cache.MetaNamespaceKeyFunc(item)
@@ -159,21 +158,46 @@ func (c *Controller) processNextItem() bool {
 			b, _ := strconv.ParseBool(item.(*ingressv1.Ingress).Annotations[annotationConfigKey])
 			if b {
 				aH := strings.Split(item.(*ingressv1.Ingress).Annotations[annotationHost], ",")
-				m := make(map[int]string)
-				for i, rH := range ingress.Spec.Rules {
-					for _, h := range aH {
-						if rH.Host == h {
-							m[i] = fmt.Sprintf("%s.", rH.Host)
+				ingressList, err := c.client.ExtensionsV1beta1().Ingresses("").List(ctx, metav1.ListOptions{})
+				if err != nil {
+					log.Printf("error %s\n", err.Error())
+				}
+				iL := make([]string, 0)
+				for _, el := range ingressList.Items {
+					ela := strings.Split(el.ObjectMeta.Annotations[annotationHost], ",")
+					for _, elb := range ela {
+						iL = append(iL, elb)
+					}
+				}
+
+				dList := make([]string, 0)
+			lo: for _, rh := range aH {
+					for _, l := range iL {
+						if rh == l {
+							continue lo
+						}
+					}
+					dList = append(dList, rh)
+				}
+
+				d := api.DnsHandler{
+					Client:    c.client,
+				}
+				dnsList := d.ListDnsPlusZone(ns)
+				fList := make([]string, 0)
+				for n, id := range dnsList{
+					for _, f := range dList{
+						if strings.TrimSuffix(n, ".") == f{
+							fmt.Printf("this to be deleted only %s\n", n)
+							fList = append(fList, id)
 						}
 					}
 				}
-				d := api.DnsHandler{
-					Client:    c.client,
-					ListHosts: m,
+
+				if len(fList) > 0 {
+					d.DeleteDnsPlusZone(ns, fList)
+					log.Println("Deleting DnsPlusZone")
 				}
-				dnsList := d.ListDnsPlusZone(ns)
-				d.DeleteDnsPlusZone(ns, dnsList)
-				log.Println("Deleting DnsPlusZone")
 			}
 		case "update":
 			fmt.Println("update called!")
@@ -206,11 +230,9 @@ func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH [
 }
 
 func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
-	fmt.Println("waitfor ingress sleep here")
 	lb := ""
 	count := 0
 	for {
-		fmt.Printf("try %d\n", count)
 		time.Sleep(time.Second * 5)
 		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {

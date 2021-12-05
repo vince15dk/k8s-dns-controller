@@ -57,7 +57,7 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]str
 	}
 }
 
-func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList map[string]string) {
+func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList []string) {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(d.Client, namespace)
 	if err != nil {
