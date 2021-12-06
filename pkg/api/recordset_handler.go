@@ -11,7 +11,7 @@ import (
 
 type RecordSetHandler struct {
 	Client      kubernetes.Interface
-	ListRecords map[int]string
+	ListRecords []string
 }
 
 func (r *RecordSetHandler) GetIngressEndpoint() {
@@ -29,6 +29,7 @@ func (r *RecordSetHandler) CreateRecordSet(namespace, lb string, zoneList map[st
 	// generate header for POST
 	h := generateHeader(&http.Header{})
 	for _, record := range r.ListRecords {
+		record = fmt.Sprintf("%s.", record)
 		for zoneName, zoneId := range zoneList {
 			if strings.Contains(record, zoneName) {
 				url := fmt.Sprintf("%s/%s/%s/%s/%s", baseUrl, s.AppKey, "zones", zoneId, "recordsets")

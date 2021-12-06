@@ -199,23 +199,17 @@ func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH [
 	lb, err := c.waitForIngressLB(ns, name)
 	if err != nil {
 		log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
-		//return false
+		return
 	}
-	ListRecords := make(map[int]string)
-	for i, rH := range ingress.Spec.Rules {
-		for _, h := range aH {
-			if strings.Contains(rH.Host, h) {
-				ListRecords[i] = fmt.Sprintf("%s.", rH.Host)
-			}
-		}
+	recordList := make([]string, 0)
+	for _, v := range ingress.Spec.Rules{
+		recordList = append(recordList, v.Host)
 	}
 	r := api.RecordSetHandler{
 		Client:      c.client,
-		ListRecords: ListRecords,
+		ListRecords: recordList,
 	}
-
-	zoneList := d.ListDnsPlusZone(ns)
-	r.CreateRecordSet(ns, lb, zoneList)
+	r.CreateRecordSet(ns, lb, d.ListDnsPlusZone(ns))
 }
 
 func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
