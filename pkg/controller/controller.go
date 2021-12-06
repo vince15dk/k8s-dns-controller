@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kanisterio/kanister/pkg/poll"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	netowrkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
@@ -50,7 +48,6 @@ func NewController(client kubernetes.Interface, informer netowrkingInformers.Ing
 			DeleteFunc: c.handleIngressDelete,
 			UpdateFunc: c.handleIngressUpdate,
 		})
-
 	return c
 }
 
@@ -60,16 +57,12 @@ func (c *Controller) Run(ch chan struct{}) error {
 	}
 
 	go wait.Until(c.worker, time.Second, ch)
-
 	<-ch
-
 	return nil
 }
 
 func (c *Controller) worker() {
-	for c.processNextItem() {
-
-	}
+	for c.processNextItem() {}
 }
 
 func (c *Controller) processNextItem() bool {
@@ -78,6 +71,7 @@ func (c *Controller) processNextItem() bool {
 		return false
 	}
 	defer c.wq.Forget(item)
+	ctx := context.Background()
 
 	if c.state == "update" {
 		updateItem, ok := item.([2]interface{})
@@ -120,16 +114,14 @@ func (c *Controller) processNextItem() bool {
 			return false
 		}
 		// check if the object has been deleted from k8s cluster
-		ctx := context.Background()
-		ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			if item.(*ingressv1.Ingress).Annotations[annotationConfigKey] == "true" {
-				c.state = "delete"
-			}
-		}
 
 		switch c.state {
 		case "create":
+			ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
+			if err != nil{
+				log.Printf("error %s\n", err.Error())
+				return false
+			}
 			b, _ := strconv.ParseBool(ingress.ObjectMeta.Annotations[annotationConfigKey])
 			if b {
 				aH := strings.Split(ingress.ObjectMeta.Annotations[annotationHost], ",")
@@ -198,8 +190,6 @@ func (c *Controller) processNextItem() bool {
 					log.Println("Deleting DnsPlusZone")
 				}
 			}
-		case "update":
-			fmt.Println("update called!")
 		}
 	} //end
 	return true
@@ -250,41 +240,6 @@ func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
 		count++
 	}
 	return "", errors.New("unable to fetch ingress lb ip")
-}
-
-func (c *Controller) waitForIngressLBPoll(namespace, name string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	lb := ""
-	err := poll.Wait(ctx, func(ctx context.Context) (bool, error) {
-		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			log.Printf("err %s\n", err.Error())
-			return true, nil
-		}
-		for _, v := range ingress.Status.LoadBalancer.Ingress {
-			if v.IP != "" {
-				lb = v.IP
-				return true, nil
-			}
-		}
-		return false, nil
-	})
-	return lb, err
-}
-
-func checkIngressLister(c *Controller, namespace, name string) bool {
-	ingress, err := c.lister.Ingresses(namespace).Get(name)
-	if err != nil {
-		log.Printf("error %s, Getting the ingress from lister", err.Error())
-		return false
-	}
-	t := ingress.ObjectMeta.Annotations[annotationConfigKey]
-	b, err := strconv.ParseBool(t)
-	if err != nil {
-		log.Printf("error %s, Failed to parse string to bool")
-	}
-	return b
 }
 
 func (c *Controller) handleIngressAdd(obj interface{}) {
