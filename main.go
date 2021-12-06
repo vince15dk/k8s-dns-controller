@@ -5,6 +5,7 @@ import (
 	"github.com/vince15dk/k8s-operator-ingress/pkg/controller"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	"log"
@@ -21,8 +22,12 @@ func main(){
 	}
 	flag.Parse()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil{
+	if err != nil {
 		log.Printf("Building ocnfig from flags, %s", err.Error())
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			log.Printf("error %s, getting inclusterconfig", err.Error())
+		}
 	}
 
 	clientSet, err := kubernetes.NewForConfig(config)

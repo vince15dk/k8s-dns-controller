@@ -188,7 +188,6 @@ func (c *Controller) processNextItem() bool {
 				for n, id := range dnsList{
 					for _, f := range dList{
 						if strings.TrimSuffix(n, ".") == f{
-							fmt.Printf("this to be deleted only %s\n", n)
 							fList = append(fList, id)
 						}
 					}
