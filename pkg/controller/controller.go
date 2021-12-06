@@ -70,6 +70,7 @@ func (c *Controller) processNextItem() bool {
 	if shutDown {
 		return false
 	}
+	defer c.wq.Done(item)
 	defer c.wq.Forget(item)
 	ctx := context.Background()
 
@@ -117,7 +118,7 @@ func (c *Controller) processNextItem() bool {
 
 		switch c.state {
 		case "create":
-			ingress, err := c.client.ExtensionsV1beta1().Ingresses(ns).Get(ctx, name, metav1.GetOptions{})
+			ingress, err := c.lister.Ingresses(ns).Get(name)
 			if err != nil{
 				log.Printf("error %s\n", err.Error())
 				return false
