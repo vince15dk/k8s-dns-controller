@@ -125,26 +125,26 @@ func (c *Controller) processNextItem() bool {
 			}
 			b, _ := strconv.ParseBool(ingress.ObjectMeta.Annotations[annotationConfigKey])
 			if b {
-				aH := strings.Split(ingress.ObjectMeta.Annotations[annotationHost], ",")
-				m := make(map[int]string)
-				for i, rH := range ingress.Spec.Rules {
-					for _, h := range aH {
-						if rH.Host == h {
-							m[i] = fmt.Sprintf("%s.", rH.Host)
+				annotationHosts := strings.Split(ingress.ObjectMeta.Annotations[annotationHost], ",")
+				s := make([]string, 0)
+				for _, ah := range annotationHosts {
+					for _, h := range ingress.Spec.Rules {
+						if ah == h.Host {
+							s = append(s, fmt.Sprintf("%s.", ah))
 						}
 					}
 				}
 
+				// s is dns zone lists to be created
 				d := api.DnsHandler{
 					Client:    c.client,
-					ListHosts: m,
+					ListHosts: s,
 				}
-				zoneList := d.ListDnsPlusZone(ns)
 
-				d.CreateDnsPlusZone(ns, zoneList)
+				d.CreateDnsPlusZone(ns, d.ListDnsPlusZone(ns))
 
 				// query dns plus to make sure ingress ip is provided
-				go c.AddRecord(ns, name, ingress, aH, d)
+				go c.AddRecord(ns, name, ingress, annotationHosts, d)
 			}
 
 		case "delete":
@@ -162,7 +162,6 @@ func (c *Controller) processNextItem() bool {
 						iL = append(iL, elb)
 					}
 				}
-
 				dList := make([]string, 0)
 			lo: for _, rh := range aH {
 					for _, l := range iL {
@@ -220,25 +219,24 @@ func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH [
 }
 
 func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
-	lb := ""
 	count := 0
 	for {
-		time.Sleep(time.Second * 5)
 		ingress, err := c.client.ExtensionsV1beta1().Ingresses(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			log.Printf("err %s\n", err.Error())
 			break
 		}
-		for _, v := range ingress.Status.LoadBalancer.Ingress {
-			if v.IP != "" {
-				lb = v.IP
-				return lb, nil
-			}
-		}
 		if count == 36 {
 			break
 		}
+		for _, v := range ingress.Status.LoadBalancer.Ingress {
+			if v.IP != "" {
+				lb := v.IP
+				return lb, nil
+			}
+		}
 		count++
+		time.Sleep(time.Second * 5)
 	}
 	return "", errors.New("unable to fetch ingress lb ip")
 }

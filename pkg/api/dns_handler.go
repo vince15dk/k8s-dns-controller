@@ -17,7 +17,7 @@ const (
 
 type DnsHandler struct {
 	Client    kubernetes.Interface
-	ListHosts map[int]string
+	ListHosts []string
 }
 
 func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]string) {
@@ -31,18 +31,18 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]str
 	h := generateHeader(&http.Header{})
 	// Create DnsPlus
 	url := fmt.Sprintf("%s/%s/%s", baseUrl, s.AppKey, "zones")
-	listHosts := make([]string, 0)
+	addHosts := make([]string, 0)
 	lo: for _, record := range d.ListHosts {
 		for zoneName, _ := range zoneList {
 			if strings.Contains(record, zoneName) {
 				continue lo
 			}
 		}
-		listHosts = append(listHosts, record)
+		addHosts = append(addHosts, record)
 	}
-	fmt.Println(listHosts)
+	fmt.Println(addHosts)
 
-	for _, host := range listHosts {
+	for _, host := range addHosts {
 		zone := scheme.DnsZone{
 			Zone: scheme.Zone{
 				ZoneName:    host,
