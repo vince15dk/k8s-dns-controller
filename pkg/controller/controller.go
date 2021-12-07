@@ -7,6 +7,7 @@ import (
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	netowrkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
@@ -62,7 +63,8 @@ func (c *Controller) Run(ch chan struct{}) error {
 }
 
 func (c *Controller) worker() {
-	for c.processNextItem() {}
+	for c.processNextItem() {
+	}
 }
 
 func (c *Controller) processNextItem() bool {
@@ -72,12 +74,11 @@ func (c *Controller) processNextItem() bool {
 	}
 	defer c.wq.Done(item)
 	defer c.wq.Forget(item)
-	ctx := context.Background()
 
 	if c.state == "update" {
 		updateItem, ok := item.([2]interface{})
 		if !ok {
-			log.Printf("error %s", errors.New("item is not converted"))
+			log.Printf("error %s", errors.New("item can not be converted"))
 			return false
 		}
 
@@ -119,7 +120,7 @@ func (c *Controller) processNextItem() bool {
 		switch c.state {
 		case "create":
 			ingress, err := c.lister.Ingresses(ns).Get(name)
-			if err != nil{
+			if err != nil {
 				log.Printf("error %s\n", err.Error())
 				return false
 			}
@@ -150,44 +151,71 @@ func (c *Controller) processNextItem() bool {
 		case "delete":
 			b, _ := strconv.ParseBool(item.(*ingressv1.Ingress).Annotations[annotationConfigKey])
 			if b {
-				aH := strings.Split(item.(*ingressv1.Ingress).Annotations[annotationHost], ",")
-				ingressList, err := c.client.ExtensionsV1beta1().Ingresses("").List(ctx, metav1.ListOptions{})
+				annotationHosts := strings.Split(item.(*ingressv1.Ingress).Annotations[annotationHost], ",")
+				ingressList, err := c.lister.List(labels.Everything())
 				if err != nil {
 					log.Printf("error %s\n", err.Error())
 				}
 				iL := make([]string, 0)
-				for _, el := range ingressList.Items {
-					ela := strings.Split(el.ObjectMeta.Annotations[annotationHost], ",")
-					for _, elb := range ela {
-						iL = append(iL, elb)
-					}
+				for _, el := range ingressList {
+					iL = strings.Split(el.Annotations[annotationHost], ",")
 				}
-				dList := make([]string, 0)
-			lo: for _, rh := range aH {
+				zoneList := make([]string, 0)
+				zoneNotDeletedList := make([]string, 0)
+			lo:
+				for _, rh := range annotationHosts {
 					for _, l := range iL {
 						if rh == l {
+							zoneNotDeletedList = append(zoneNotDeletedList, l)
 							continue lo
 						}
 					}
-					dList = append(dList, rh)
+					zoneList = append(zoneList, rh)
 				}
 
 				d := api.DnsHandler{
-					Client:    c.client,
+					Client: c.client,
+				}
+				r := api.RecordSetHandler{
+					Client: c.client,
 				}
 				dnsList := d.ListDnsPlusZone(ns)
-				fList := make([]string, 0)
-				for n, id := range dnsList{
-					for _, f := range dList{
-						if strings.TrimSuffix(n, ".") == f{
-							fList = append(fList, id)
+
+				// dnsList zoneName: zoneId
+				// to get id from dnsList
+				for n, id := range dnsList {
+					for _, f := range zoneList {
+						if strings.TrimSuffix(n, ".") == f {
+							d.ListHosts = append(d.ListHosts, id)
 						}
 					}
 				}
 
-				if len(fList) > 0 {
-					d.DeleteDnsPlusZone(ns, fList)
+				if len(d.ListHosts) > 0 {
+					d.DeleteDnsPlusZone(ns)
 					log.Println("Deleting DnsPlusZone")
+				}
+
+				for n, id := range dnsList{
+					for _, f := range zoneNotDeletedList{
+						if strings.TrimSuffix(n, ".") == f {
+							r.ListZones = append(r.ListZones, id)
+						}
+					}
+				}
+
+				if len(zoneNotDeletedList) > 0 {
+					r.ListRecords = []string{}
+					for _, zid := range r.ListZones{
+						for rn, rd := range r.ListRecordSet(ns, zid){
+							for _, v := range item.(*ingressv1.Ingress).Spec.Rules{
+								if strings.TrimSuffix(rn, ".") == v.Host{
+									r.ListRecords = append(r.ListRecords, rd)
+								}
+							}
+						}
+						r.DeleteRecordSet(ns, zid)
+					}
 				}
 			}
 		}
@@ -202,7 +230,7 @@ func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH [
 		return
 	}
 	recordList := make([]string, 0)
-	for _, v := range ingress.Spec.Rules{
+	for _, v := range ingress.Spec.Rules {
 		recordList = append(recordList, v.Host)
 	}
 	r := api.RecordSetHandler{
@@ -238,7 +266,6 @@ func (c *Controller) waitForIngressLB(namespace, name string) (string, error) {
 func (c *Controller) handleIngressAdd(obj interface{}) {
 	log.Println("Adding ingress handler is called")
 	c.state = "create"
-	//c.wq.Add(obj)
 	c.wq.AddAfter(obj, time.Second*2)
 }
 
@@ -255,5 +282,5 @@ func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {
 		old,
 		new,
 	}
-	c.wq.AddAfter(s, time.Second*2)
+	c.wq.Add(s)
 }

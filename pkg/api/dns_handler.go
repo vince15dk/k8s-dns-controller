@@ -57,7 +57,7 @@ func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]str
 	}
 }
 
-func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList []string) {
+func (d *DnsHandler) DeleteDnsPlusZone(namespace string) {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(d.Client, namespace)
 	if err != nil {
@@ -67,8 +67,8 @@ func (d *DnsHandler) DeleteDnsPlusZone(namespace string, zoneList []string) {
 	// generate header for POST
 	h := generateHeader(&http.Header{})
 
-	// Create DnsPlus
-	for _, zoneId := range zoneList{
+	// Delete Zones
+	for _, zoneId := range d.ListHosts{
 		url := fmt.Sprintf("%s/%s/%s=%s", baseUrl, s.AppKey, "zones/async?zoneIdList", zoneId)
 		_, err := DeleteHandleFunc(url, h)
 		if err != nil {
@@ -113,7 +113,3 @@ func (d *DnsHandler) ListDnsPlusZone(namespace string) map[string]string {
 	return m
 }
 
-//func (d *DnsHandler) DeleteDnsPlusZone()
-
-//
-//}
