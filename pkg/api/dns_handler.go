@@ -18,6 +18,7 @@ const (
 type DnsHandler struct {
 	Client    kubernetes.Interface
 	ListHosts []string
+	CachedHost map[string]string
 }
 
 func (d *DnsHandler) CreateDnsPlusZone(namespace string, zoneList map[string]string) {

@@ -17,10 +17,6 @@ type RecordSetHandler struct {
 	ListZones   []string
 }
 
-func (r *RecordSetHandler) GetIngressEndpoint() {
-
-}
-
 func (r *RecordSetHandler) ListRecordSet(namespace, zoneId string) map[string]string {
 	// generate secret struct from k8s secret
 	s, err := generateSecret(r.Client, namespace)
@@ -110,9 +106,4 @@ func (r *RecordSetHandler) DeleteRecordSet(namespace, zoneId string) {
 			return
 		}
 	}
-
-}
-
-func (r *RecordSetHandler) UpdateRecordSet() {
-
 }

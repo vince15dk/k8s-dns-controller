@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	set "github.com/deckarep/golang-set"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/api"
 	ingressv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +82,8 @@ func (c *Controller) processNextItem() bool {
 			log.Printf("error %s", errors.New("item can not be converted"))
 			return false
 		}
+		ns := updateItem[1].(*ingressv1.Ingress).Namespace
+		name := updateItem[1].(*ingressv1.Ingress).Name
 
 		oldObj := make([]interface{}, 0)
 		newObj := make([]interface{}, 0)
@@ -92,17 +95,57 @@ func (c *Controller) processNextItem() bool {
 		for _, r := range updateItem[1].(*ingressv1.Ingress).Spec.Rules {
 			newObj = append(newObj, r.Host)
 		}
-		//
-		//fmt.Println(oldObj)
-		//fmt.Println(newObj)
-		//fmt.Println("using golang-set library")
-		//oldSet := set.NewSetFromSlice(oldObj)
-		//newSet := set.NewSetFromSlice(newObj)
-		//result1 := oldSet.Difference(newSet) // show deleted one
-		//result2 := newSet.Difference(oldSet) // show added one
-		//
-		//fmt.Println(result1.ToSlice())
-		//fmt.Println(result2.ToSlice())
+
+		oldSet := set.NewSetFromSlice(oldObj)
+		newSet := set.NewSetFromSlice(newObj)
+		result1 := oldSet.Difference(newSet) // show deleted one
+		result2 := newSet.Difference(oldSet) // show added one
+
+		if len(result2.ToSlice()) > 0 {
+
+			ingress, err := c.lister.Ingresses(ns).Get(name)
+			if err != nil {
+				log.Printf("error %s\n", err.Error())
+				return false
+			}
+			// s is dns zone lists to be created
+			d := api.DnsHandler{
+				Client: c.client,
+			}
+
+			// query dns plus to make sure ingress ip is provided
+			go c.AddRecord(ns, name, ingress, d, result2.ToSlice())
+		}
+		// delete record
+		if len(result1.ToSlice()) > 0 {
+			r := api.RecordSetHandler{
+				Client: c.client,
+			}
+			d := api.DnsHandler{
+				Client: c.client,
+			}
+
+			recordList := make([]string, 0)
+			for _, v := range result1.ToSlice(){
+				recordList = append(recordList, v.(string))
+			}
+
+			dnsList := d.ListDnsPlusZone(ns)
+			for _, v := range dnsList{
+				r.ListZones = append(r.ListZones, v)
+			}
+			r.ListRecords = []string{}
+			for _, zid := range r.ListZones {
+				for rn, rd := range r.ListRecordSet(ns, zid) {
+					for _, v := range recordList {
+						if strings.TrimSuffix(rn, ".") == v {
+							r.ListRecords = append(r.ListRecords, rd)
+						}
+					}
+				}
+				r.DeleteRecordSet(ns, zid)
+			}
+		}
 
 	} else { // test
 		key, err := cache.MetaNamespaceKeyFunc(item)
@@ -145,7 +188,7 @@ func (c *Controller) processNextItem() bool {
 				d.CreateDnsPlusZone(ns, d.ListDnsPlusZone(ns))
 
 				// query dns plus to make sure ingress ip is provided
-				go c.AddRecord(ns, name, ingress, annotationHosts, d)
+				go c.AddRecord(ns, name, ingress, d, nil)
 			}
 
 		case "delete":
@@ -196,8 +239,8 @@ func (c *Controller) processNextItem() bool {
 					log.Println("Deleting DnsPlusZone")
 				}
 
-				for n, id := range dnsList{
-					for _, f := range zoneNotDeletedList{
+				for n, id := range dnsList {
+					for _, f := range zoneNotDeletedList {
 						if strings.TrimSuffix(n, ".") == f {
 							r.ListZones = append(r.ListZones, id)
 						}
@@ -206,10 +249,10 @@ func (c *Controller) processNextItem() bool {
 
 				if len(zoneNotDeletedList) > 0 {
 					r.ListRecords = []string{}
-					for _, zid := range r.ListZones{
-						for rn, rd := range r.ListRecordSet(ns, zid){
-							for _, v := range item.(*ingressv1.Ingress).Spec.Rules{
-								if strings.TrimSuffix(rn, ".") == v.Host{
+					for _, zid := range r.ListZones {
+						for rn, rd := range r.ListRecordSet(ns, zid) {
+							for _, v := range item.(*ingressv1.Ingress).Spec.Rules {
+								if strings.TrimSuffix(rn, ".") == v.Host {
 									r.ListRecords = append(r.ListRecords, rd)
 								}
 							}
@@ -223,15 +266,21 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
-func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, aH []string, d api.DnsHandler) {
+func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, d api.DnsHandler, addedRecord []interface{}) {
 	lb, err := c.waitForIngressLB(ns, name)
 	if err != nil {
 		log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
 		return
 	}
 	recordList := make([]string, 0)
-	for _, v := range ingress.Spec.Rules {
-		recordList = append(recordList, v.Host)
+	if len(addedRecord) > 0 {
+		for _, v := range addedRecord {
+			recordList = append(recordList, v.(string))
+		}
+	} else {
+		for _, v := range ingress.Spec.Rules {
+			recordList = append(recordList, v.Host)
+		}
 	}
 	r := api.RecordSetHandler{
 		Client:      c.client,
