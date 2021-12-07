@@ -2,28 +2,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/vince15dk/k8s-operator-ingress/pkg/controller"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"log"
-	"path/filepath"
 	"time"
 )
 
 func main(){
 	var kubeconfig *string
-	if home := homedir.HomeDir(); home != ""{
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	}
+	kubeconfig = flag.String("kubeconfig", "/Users/nhn/.kube/config", "location to your kubeconfig file")
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		log.Printf("Building ocnfig from flags, %s", err.Error())
+	if err != nil{
+		// handle error
+		fmt.Printf("error %s, building config from flags\n", err.Error())
 		config, err = rest.InClusterConfig()
-		if err != nil {
-			log.Printf("error %s, getting inclusterconfig", err.Error())
+		if err != nil{
+			fmt.Printf("error %s, getting inclusterconfig", err.Error())
 		}
 	}
 
