@@ -126,12 +126,12 @@ func (c *Controller) processNextItem() bool {
 			}
 
 			recordList := make([]string, 0)
-			for _, v := range result1.ToSlice(){
+			for _, v := range result1.ToSlice() {
 				recordList = append(recordList, v.(string))
 			}
 
 			dnsList := d.ListDnsPlusZone(ns)
-			for _, v := range dnsList{
+			for _, v := range dnsList {
 				r.ListZones = append(r.ListZones, v)
 			}
 			r.ListRecords = []string{}
@@ -173,7 +173,7 @@ func (c *Controller) processNextItem() bool {
 				s := make([]string, 0)
 				for _, ah := range annotationHosts {
 					for _, h := range ingress.Spec.Rules {
-						if ah == h.Host {
+						if strings.Contains(h.Host, ah) {
 							s = append(s, fmt.Sprintf("%s.", ah))
 						}
 					}
@@ -200,8 +200,9 @@ func (c *Controller) processNextItem() bool {
 					log.Printf("error %s\n", err.Error())
 				}
 				iL := make([]string, 0)
+
 				for _, el := range ingressList {
-					iL = strings.Split(el.Annotations[annotationHost], ",")
+					iL = strings.Split(el.ObjectMeta.Annotations[annotationHost], ",")
 				}
 				zoneList := make([]string, 0)
 				zoneNotDeletedList := make([]string, 0)
