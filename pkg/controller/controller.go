@@ -230,10 +230,10 @@ func (c *Controller) processNextItem() bool {
 					log.Printf("error %s\n", err.Error())
 				}
 				iL := make([]string, 0)
-
 				for _, el := range ingressList {
-					iL = strings.Split(el.ObjectMeta.Annotations[annotationHost], ",")
+					iL = append(iL, strings.Split(el.ObjectMeta.Annotations[annotationHost], ",")...)
 				}
+
 				zoneList := make([]string, 0)
 				zoneNotDeletedList := make([]string, 0)
 			lo:
@@ -246,13 +246,13 @@ func (c *Controller) processNextItem() bool {
 					}
 					zoneList = append(zoneList, rh)
 				}
-
 				d := api.DnsHandler{
 					Client: c.client,
 				}
 				r := api.RecordSetHandler{
 					Client: c.client,
 				}
+
 				dnsList := d.ListDnsPlusZone(ns)
 
 				// dnsList zoneName: zoneId
