@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	secretName               = "dns-token"
-	annotationConfigKey      = "nhn.cloud/dnsplus-config"
-	annotationHost           = "nhn.cloud/dnsplus-hosts"
-	annotationLoadBalancerIp = "nhn.cloud/dsnplus-loadbalancer-ip"
+	secretName          = "dns-token"
+	annotationConfigKey = "nhn.cloud/dnsplus-config"
+	annotationHost      = "nhn.cloud/dnsplus-hosts"
+	annotationStaticIp  = "nhn.cloud/dsnplus-static-ip"
 )
 
 type Controller struct {
@@ -268,10 +268,17 @@ func (c *Controller) processNextItem() bool {
 }
 
 func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, d api.DnsHandler, addedRecord []interface{}) {
-	lb, err := c.waitForIngressLB(ns, name)
-	if err != nil {
-		log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
-		return
+	lb := ""
+	if ingress.ObjectMeta.Annotations[annotationStaticIp] == "" {
+		ingressLB, err := c.waitForIngressLB(ns, name)
+		if err != nil {
+			log.Printf("error %s, wating for ingress loadbalancer ip to be displayed", err.Error())
+			return
+		}
+		lb = ingressLB
+	}else{
+		staticLB := ingress.ObjectMeta.Annotations[annotationStaticIp]
+		lb = staticLB
 	}
 	recordList := make([]string, 0)
 	if len(addedRecord) > 0 {
@@ -332,5 +339,5 @@ func (c *Controller) handleIngressUpdate(old interface{}, new interface{}) {
 		old,
 		new,
 	}
-	c.wq.Add(s)
+	c.wq.AddRateLimited(s)
 }

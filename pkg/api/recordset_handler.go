@@ -58,7 +58,6 @@ func (r *RecordSetHandler) CreateRecordSet(namespace, lb string, zoneList map[st
 		log.Printf("error %s", err.Error())
 		return
 	}
-
 	// generate header for POST
 	h := generateHeader(&http.Header{})
 	for _, record := range r.ListRecords {
