@@ -82,6 +82,7 @@ func (c *Controller) processNextItem() bool {
 			log.Printf("error %s", errors.New("item can not be converted"))
 			return false
 		}
+
 		ns := updateItem[1].(*ingressv1.Ingress).Namespace
 		name := updateItem[1].(*ingressv1.Ingress).Name
 
@@ -118,6 +119,7 @@ func (c *Controller) processNextItem() bool {
 		newSetHosts := set.NewSetFromSlice(newObjHosts)
 		resultHosts1 := oldSetHosts.Difference(newSetHosts) // show deleted one
 		resultHosts2 := newSetHosts.Difference(oldSetHosts) // show added one
+
 		if len(resultHosts1.ToSlice()) > 0 {
 			s := make([]string, 0)
 			for _, v := range resultHosts1.ToSlice() {
@@ -176,7 +178,7 @@ func (c *Controller) processNextItem() bool {
 			}
 		}
 
-	} else { // test
+	} else {
 		key, err := cache.MetaNamespaceKeyFunc(item)
 		if err != nil {
 			log.Printf("error %s called Namespace key func on cache for item", err.Error())
@@ -187,7 +189,6 @@ func (c *Controller) processNextItem() bool {
 			log.Printf("error %s, Getting the namespace from lister", err.Error())
 			return false
 		}
-		// check if the object has been deleted from k8s cluster
 
 		switch c.state {
 		case "create":
@@ -221,9 +222,9 @@ func (c *Controller) processNextItem() bool {
 			}
 
 		case "delete":
-			b, _ := strconv.ParseBool(item.(*ingressv1.Ingress).Annotations[annotationConfigKey])
+			b, _ := strconv.ParseBool(item.(*ingressv1.Ingress).ObjectMeta.Annotations[annotationConfigKey])
 			if b {
-				annotationHosts := strings.Split(item.(*ingressv1.Ingress).Annotations[annotationHost], ",")
+				annotationHosts := strings.Split(item.(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost], ",")
 				ingressList, err := c.lister.List(labels.Everything())
 				if err != nil {
 					log.Printf("error %s\n", err.Error())
