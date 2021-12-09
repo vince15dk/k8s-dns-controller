@@ -85,23 +85,52 @@ func (c *Controller) processNextItem() bool {
 		ns := updateItem[1].(*ingressv1.Ingress).Namespace
 		name := updateItem[1].(*ingressv1.Ingress).Name
 
-		oldObj := make([]interface{}, 0)
-		newObj := make([]interface{}, 0)
+		// rules
+		oldObjRules := make([]interface{}, 0)
+		newObjRules := make([]interface{}, 0)
 
 		for _, r := range updateItem[0].(*ingressv1.Ingress).Spec.Rules {
-			oldObj = append(oldObj, r.Host)
+			oldObjRules = append(oldObjRules, r.Host)
 		}
 
 		for _, r := range updateItem[1].(*ingressv1.Ingress).Spec.Rules {
-			newObj = append(newObj, r.Host)
+			newObjRules = append(newObjRules, r.Host)
 		}
 
-		oldSet := set.NewSetFromSlice(oldObj)
-		newSet := set.NewSetFromSlice(newObj)
-		result1 := oldSet.Difference(newSet) // show deleted one
-		result2 := newSet.Difference(oldSet) // show added one
+		oldSetRules := set.NewSetFromSlice(oldObjRules)
+		newSetRules := set.NewSetFromSlice(newObjRules)
+		resultRules1 := oldSetRules.Difference(newSetRules) // show deleted one
+		resultRules2 := newSetRules.Difference(oldSetRules) // show added one
 
-		if len(result2.ToSlice()) > 0 {
+		// hosts
+		oldObjHosts := make([]interface{}, 0)
+		newObjHosts := make([]interface{}, 0)
+
+		for _, r := range strings.Split(updateItem[0].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost], ",") {
+			oldObjHosts = append(oldObjHosts, r)
+		}
+
+		for _, r := range strings.Split(updateItem[1].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost], ",") {
+			newObjHosts = append(newObjHosts, r)
+		}
+
+		oldSetHosts := set.NewSetFromSlice(oldObjHosts)
+		newSetHosts := set.NewSetFromSlice(newObjHosts)
+		resultHosts1 := oldSetHosts.Difference(newSetHosts) // show deleted one
+		resultHosts2 := newSetHosts.Difference(oldSetHosts) // show added one
+		if len(resultHosts1.ToSlice()) > 0 {
+			s := make([]string, 0)
+			for _, v := range resultHosts1.ToSlice() {
+				s = append(s, v.(string))
+			}
+			deleteHosts := strings.Join(s, ",")
+			updateItem[0].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost] = deleteHosts
+			c.handleIngressDelete(updateItem[0])
+		}
+		if len(resultHosts2.ToSlice()) > 0 {
+			c.handleIngressAdd(updateItem[1])
+		}
+		if len(resultRules2.ToSlice()) > 0 {
 
 			ingress, err := c.lister.Ingresses(ns).Get(name)
 			if err != nil {
@@ -114,10 +143,10 @@ func (c *Controller) processNextItem() bool {
 			}
 
 			// query dns plus to make sure ingress ip is provided
-			go c.AddRecord(ns, name, ingress, d, result2.ToSlice())
+			go c.AddRecord(ns, name, ingress, d, resultRules2.ToSlice())
 		}
 		// delete record
-		if len(result1.ToSlice()) > 0 {
+		if len(resultRules1.ToSlice()) > 0 {
 			r := api.RecordSetHandler{
 				Client: c.client,
 			}
@@ -126,7 +155,7 @@ func (c *Controller) processNextItem() bool {
 			}
 
 			recordList := make([]string, 0)
-			for _, v := range result1.ToSlice() {
+			for _, v := range resultRules1.ToSlice() {
 				recordList = append(recordList, v.(string))
 			}
 
@@ -276,7 +305,7 @@ func (c *Controller) AddRecord(ns, name string, ingress *ingressv1.Ingress, d ap
 			return
 		}
 		lb = ingressLB
-	}else{
+	} else {
 		staticLB := ingress.ObjectMeta.Annotations[annotationStaticIp]
 		lb = staticLB
 	}
