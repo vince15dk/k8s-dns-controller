@@ -83,12 +83,6 @@ func (c *Controller) processNextItem() bool {
 			return false
 		}
 
-		fmt.Println("this is called for update")
-		fmt.Println("old")
-		fmt.Println(updateItem[0].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost])
-		fmt.Println("new")
-		fmt.Println(updateItem[1].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost])
-
 		ns := updateItem[1].(*ingressv1.Ingress).Namespace
 		name := updateItem[1].(*ingressv1.Ingress).Name
 
