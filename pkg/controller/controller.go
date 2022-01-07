@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	netowrkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
+	networkingInformers "k8s.io/client-go/informers/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes"
 	networkingLister "k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
@@ -36,7 +36,7 @@ type Controller struct {
 	state         string
 }
 
-func NewController(client kubernetes.Interface, informer netowrkingInformers.IngressInformer) *Controller {
+func NewController(client kubernetes.Interface, informer networkingInformers.IngressInformer) *Controller {
 	c := &Controller{
 		client:        client,
 		clusterSynced: informer.Informer().HasSynced,
@@ -82,6 +82,12 @@ func (c *Controller) processNextItem() bool {
 			log.Printf("error %s", errors.New("item can not be converted"))
 			return false
 		}
+
+		fmt.Println("this is called for update")
+		fmt.Println("old")
+		fmt.Println(updateItem[0].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost])
+		fmt.Println("new")
+		fmt.Println(updateItem[1].(*ingressv1.Ingress).ObjectMeta.Annotations[annotationHost])
 
 		ns := updateItem[1].(*ingressv1.Ingress).Namespace
 		name := updateItem[1].(*ingressv1.Ingress).Name

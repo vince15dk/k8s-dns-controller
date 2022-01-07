@@ -23,7 +23,7 @@ func main(){
 	flag.Parse()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		log.Printf("Building ocnfig from flags, %s", err.Error())
+		log.Printf("Building config from flags, %s", err.Error())
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			log.Printf("error %s, getting inclusterconfig", err.Error())
