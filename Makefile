@@ -12,7 +12,9 @@ SHELL := /bin/bash
 
 VERSION := 1.0
 
-sales-api:
+all: docker-build docker-push
+
+docker-build:
 	docker build \
 		-t b65b0111-kr1-registry.container.cloud.toast.com/dns-controller:$(version) \
 		--build-arg PACKAGE_NAME=sales-api \
@@ -27,6 +29,9 @@ docker-push:
 tidy:
 	go mod tidy
 	go mod vendor
+
+run:
+	go run main.go
 
 test:
 	go test -v ./... -count=1
